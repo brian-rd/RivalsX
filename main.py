@@ -9,6 +9,16 @@ from dotenv import load_dotenv
 import pandas as pd
 from collections import Counter
 from datetime import datetime
+import re
+import cv2
+import numpy as np
+import urllib.parse
+
+import io
+from PIL import Image
+import easyocr
+import torch
+reader = easyocr.Reader(["en", "de", "es", "sv", "fr"], gpu=False)
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -53,6 +63,45 @@ heroes_icons = {
     "Iron Fist": "https://mrapi.org/assets/characters/iron-fist-headbig.png"
 }
 
+heroes_colors = {
+    "Bruce Banner": "#4A7A3D",
+    "The Punisher": "#2B2B2B",
+    "Storm": "#D4D4D4",
+    "Loki": "#4B6F44",
+    "Doctor Strange": "#8B0000",
+    "Mantis": "#3FA34D",
+    "Hawkeye": "#6B3FA0",
+    "Captain America": "#0033A0",
+    "Rocket Raccoon": "#704214",
+    "Hela": "#0B3D2E",
+    "Cloak & Dagger": "#000000",
+    "Black Panther": "#101820",
+    "Groot": "#8B5A2B",
+    "Magik": "#FFD700",
+    "Moon Knight": "#C0C0C0",
+    "Luna Snow": "#B0E0E6",
+    "Squirrel Girl": "#A0522D",
+    "Black Widow": "#990000",
+    "Iron Man": "#B22222",
+    "Venom": "#1A1A1A",
+    "Spider-man": "#E60000",
+    "Magneto": "#800020",
+    "Scarlet Witch": "#FF2400",
+    "Thor": "#A9A9A9",
+    "Mister Fantastic": "#4169E1",
+    "Winter Soldier": "#555555",
+    "Peni Parker": "#FF4F00",
+    "Star-lord": "#993333",
+    "Namor": "#0047AB",
+    "Adam Warlock": "#DAA520",
+    "Jeff The Land Shark": "#87CEEB",
+    "Psylocke": "#4B0082",
+    "Wolverine": "#FFD700",
+    "Invisible Woman": "#ADD8E6",
+    "Iron Fist": "#32CD32"
+}
+
+
 def parse_stats(data):
     if not data:
         return {"Private": "true"}
@@ -78,7 +127,7 @@ def parse_stats(data):
         if (ranked := stats.get("ranked"))
     ]
 
-    hero_df = pd.DataFrame(hero_data).sort_values(by="Matches", ascending=False)
+    hero_df = pd.DataFrame(hero_data).fillna({'Matches': 0}).sort_values(by="Matches", ascending=False)
     top_3_heroes = hero_df.head(3)
     
     match_history = data.get("match_history", [])
@@ -93,7 +142,7 @@ def parse_stats(data):
         {"Hero": hero, "Matches in Recent History": matches}
         for hero, matches in recent_hero_counts.items()
     ]
-    recent_hero_df_all = pd.DataFrame(recent_hero_data_all)
+    recent_hero_df_all = pd.DataFrame(recent_hero_data_all).sort_values(by="Matches in Recent History", ascending=False).head(5)
 
     results = {
         "Username": username,
@@ -115,12 +164,18 @@ def build_embed(results):
     username = results["Username"]
     rank = results.get("Rank", "Unranked")
     
+    top_heroes = results["Top 3 Most Played Heroes in Ranked"]
+    top_hero = top_heroes[0]['Hero'] if top_heroes else None
+
     embed = discord.Embed(
         title=f"📊 {username}'s Stats",
         url=f"https://tracker.gg/marvel-rivals/profile/ign/{username}/overview",
-        colour=0x00b0f4,
+        colour=discord.Colour(int(heroes_colors.get(top_hero, "#000000").lstrip('#'), 16)),
         timestamp=datetime.now()
     )
+    
+    if top_hero and top_hero in heroes_icons:
+        embed.set_thumbnail(url=heroes_icons[top_hero])
 
     overall_stats = results["Overall Ranked Stats"]
     embed.add_field(
@@ -135,8 +190,6 @@ def build_embed(results):
     )
     
     embed.add_field(name="Most Played Heroes", value="", inline=False)
-
-    top_heroes = results["Top 3 Most Played Heroes in Ranked"]
 
     for i, hero in enumerate(top_heroes):
         embed.add_field(
@@ -161,15 +214,10 @@ def build_embed(results):
 
     embed.add_field(name="⏳ Recently Played Heroes", value=recent_heroes_text, inline=False)
 
-    top_hero = top_heroes[0]['Hero'] if top_heroes else None
-    if top_hero and top_hero in heroes_icons:
-        embed.set_thumbnail(url=heroes_icons[top_hero])
-
     embed.set_footer(
         text="Powered by RivalsX",
         icon_url="https://cdn2.steamgriddb.com/icon/916030603cc86a9b3d29f4d64f1bc415/32/256x256.png"
     )
-    
     return embed
 
 @bot.event
@@ -184,12 +232,14 @@ async def on_ready():
 @bot.command()
 async def stats(ctx, *args):
     name = ' '.join(args)
+    print(*args)
+    print(name)
     async with httpx.AsyncClient() as client:
         response = await client.get(f"https://mrapi.org/api/player-id/{name}")
         if response.status_code == 200:
             data = orjson.loads(response.content)
-            if data['id'] is None:
-                await ctx.send("Player not found")
+            if data['id'] is None or data['name'].lower() !=  name.lower():
+                await ctx.send(f"{name} couldn't be found, try here: https://tracker.gg/marvel-rivals/profile/ign/{urllib.parse.quote(name)}/overview")
                 return
             userID = data['id']
             response2 = await client.get(f"https://mrapi.org/api/player/{userID}")
@@ -199,9 +249,9 @@ async def stats(ctx, *args):
                 embed = build_embed(results)
                 await ctx.send(embed=embed)
             else:
-                print("Private Profile")
+                print("Private Profile 1")
                 embed = discord.Embed(
-                    title="🔒 Private Profile",
+                    title=f"🔒 {name}'s stats",
                     description="This profile is set to private.",
                     colour=0xff0000,
                     timestamp=datetime.now()
@@ -210,7 +260,42 @@ async def stats(ctx, *args):
         else:
             print(f"Request failed with status {response.status_code}")
             print("Flag2")
-            await ctx.send("Player not found")
+            await ctx.send(f"{name} couldn't be found")
+
+def clean_name(text):
+    """ Removes numbers at the start and extra spaces from names """
+    return re.sub(r"^\d+", "", text).strip()
+
+def extract_names_from_image(image_data):
+    """ Extract player names from a leaderboard image using strict OCR filtering. """
+    image = np.array(Image.open(io.BytesIO(image_data)).convert("RGB"))
+    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    extracted_text = reader.readtext(image, detail=0)
+    player_names = [clean_name(line) for line in extracted_text if len(line) > 2]
+    return list(set(player_names))
+
+@bot.command()
+async def leaderboard(ctx):
+    """ Extracts leaderboard names from an uploaded image and fetches stats for each player. """
+    if not ctx.message.attachments:
+        return await ctx.send("Please upload an image of the leaderboard.")
+
+    attachment = ctx.message.attachments[0]
+    
+    if not attachment.content_type.startswith("image/"):
+        return await ctx.send("Please upload a valid image file.")
+
+    image_data = await attachment.read()
+
+    player_names = extract_names_from_image(image_data)
+
+    if not player_names:
+        return await ctx.send("No valid player names detected in the image.")
+
+    await ctx.send(f"Detected Players: {', '.join(player_names)}\nFetching stats...")
+    
+    for name in player_names:
+        await stats(ctx, name)
 
       
 load_dotenv()

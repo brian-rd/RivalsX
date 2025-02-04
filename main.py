@@ -10,8 +10,6 @@ import pandas as pd
 from collections import Counter
 from datetime import datetime
 
-
-
 intents = discord.Intents.default()
 intents.message_content = True
 
@@ -56,6 +54,8 @@ heroes_icons = {
 }
 
 def parse_stats(data):
+    if not data:
+        return {"Private": "true"}
     username = data.get("player_name")
     rank = data["stats"]["rank"]["rank"]
     ranked_stats = data["stats"]["ranked"]
@@ -97,6 +97,7 @@ def parse_stats(data):
 
     results = {
         "Username": username,
+        "Private": "false",
         "Rank": rank,
         "Overall Ranked Stats": {
             "Total Ranked Matches": total_ranked_matches,
@@ -110,7 +111,7 @@ def parse_stats(data):
     
     return results
 
-def build_embed(results):
+def build_embed(results):        
     username = results["Username"]
     rank = results.get("Rank", "Unranked")
     
@@ -171,7 +172,6 @@ def build_embed(results):
     
     return embed
 
-
 @bot.event
 async def on_ready():
     try:
@@ -188,6 +188,9 @@ async def stats(ctx, *args):
         response = await client.get(f"https://mrapi.org/api/player-id/{name}")
         if response.status_code == 200:
             data = orjson.loads(response.content)
+            if data['id'] is None:
+                await ctx.send("Player not found")
+                return
             userID = data['id']
             response2 = await client.get(f"https://mrapi.org/api/player/{userID}")
             if response2.status_code == 200:
@@ -196,13 +199,19 @@ async def stats(ctx, *args):
                 embed = build_embed(results)
                 await ctx.send(embed=embed)
             else:
-                print(f"Request failed with status {response.status_code}")
-                await ctx.send("Player not found")
+                print("Private Profile")
+                embed = discord.Embed(
+                    title="🔒 Private Profile",
+                    description="This profile is set to private.",
+                    colour=0xff0000,
+                    timestamp=datetime.now()
+                )
+                await ctx.send(embed=embed)
         else:
             print(f"Request failed with status {response.status_code}")
+            print("Flag2")
             await ctx.send("Player not found")
 
-    
       
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')

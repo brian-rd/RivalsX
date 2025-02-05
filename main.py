@@ -229,10 +229,11 @@ async def stats(ctx, *args):
         response = await client.get(f"https://mrapi.org/api/player-id/{name}")
         if response.status_code == 200:
             data = orjson.loads(response.content)
-            if data['id'] is None or data['name'].lower() !=  name.lower():
+            player = next((player for player in data if player['name'].lower() == name.lower()), None)
+            if player is None:
                 await ctx.send(f"{name} couldn't be found, try here: https://tracker.gg/marvel-rivals/profile/ign/{urllib.parse.quote(name)}/overview")
                 return
-            userID = data['id']
+            userID = player['aid']
             response2 = await client.get(f"https://mrapi.org/api/player/{userID}")
             if response2.status_code == 200:
                 data2 = orjson.loads(response2.content)

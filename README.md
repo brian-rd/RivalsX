@@ -12,6 +12,7 @@ Uses [MR(API)](https://mrapi.org/), check out their work!
 - **Image Support**: Upload an image of player names, and the bot will use OCR to extract player names and retrieve their stats.
 
 ## Showcase
+![Image 0](https://i.imgur.com/jY3bf7C.png)
 ![Image 1](https://i.imgur.com/LWERmrD.png)
 ![Image 2](https://i.imgur.com/3BKTR2Y.png)
 ![Image 3](https://i.imgur.com/d66b5ly.png)

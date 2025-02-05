@@ -1,22 +1,15 @@
 import os
-import re
-import io
-import cv2
 import httpx
 import orjson
 import asyncio
 import discord
 import urllib.parse
-import numpy as np
 import pandas as pd
-from PIL import Image
 from dotenv import load_dotenv
 from datetime import datetime
 from collections import Counter
 from discord.ext import commands, tasks
 from discord import app_commands
-import easyocr
-reader = easyocr.Reader(["en", "de", "es", "sv", "fr"], gpu=False)
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -259,41 +252,6 @@ async def stats(ctx, *args):
             print(f"Request failed with status {response.status_code}")
             print("Flag2")
             await ctx.send(f"{name} couldn't be found")
-
-def clean_name(text):
-    """ Removes numbers at the start and extra spaces from names """
-    return re.sub(r"^\d+", "", text).strip()
-
-def extract_names_from_image(image_data):
-    """ Extract player names from a leaderboard image using strict OCR filtering. """
-    image = np.array(Image.open(io.BytesIO(image_data)).convert("RGB"))
-    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-    extracted_text = reader.readtext(image, detail=0)
-    player_names = [clean_name(line) for line in extracted_text if len(line) > 2]
-    return list(set(player_names))
-
-@bot.command()
-async def leaderboard(ctx):
-    """ Extracts leaderboard names from an uploaded image and fetches stats for each player. """
-    if not ctx.message.attachments:
-        return await ctx.send("Please upload an image of the leaderboard.")
-
-    attachment = ctx.message.attachments[0]
-    
-    if not attachment.content_type.startswith("image/"):
-        return await ctx.send("Please upload a valid image file.")
-
-    image_data = await attachment.read()
-
-    player_names = extract_names_from_image(image_data)
-
-    if not player_names:
-        return await ctx.send("No valid player names detected in the image.")
-
-    await ctx.send(f"Detected Players: {', '.join(player_names)}\nFetching stats...")
-    
-    for name in player_names:
-        await stats(ctx, name)
 
       
 load_dotenv()

@@ -3,6 +3,10 @@
 A powerful, efficient Discord bot that fetches player statistics from Marvel Rivals, allowing users to quickly view ranked performance, most played heroes, and match history.
 Uses [MR(API)](https://mrapi.org/), check out their work!
 
+## 🤖 How to add
+[Invite the bot to your server by clicking here!](https://discord.com/oauth2/authorize?client_id=1335330587510046751)
+**NOTE**: Currently only hosting the non-image version of the bot because of hosting limitations (Torch has a size of over 1GB, even as CPU only!). As a result, `.leaderboard` will not work.
+
 ## ✨ Features
 - **Fetch Player Stats**: Retrieve rank, win rate, hero data and match history for any player.
 - **Image Support**: Upload an image of player names, and the bot will use OCR to extract player names and retrieve their stats.

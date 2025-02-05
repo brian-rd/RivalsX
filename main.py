@@ -1,23 +1,21 @@
-import discord
-from discord.ext import commands, tasks
-from discord import app_commands
-import asyncio
+import os
+import re
+import io
+import cv2
 import httpx
 import orjson
-import os
-from dotenv import load_dotenv
-import pandas as pd
-from collections import Counter
-from datetime import datetime
-import re
-import cv2
-import numpy as np
+import asyncio
+import discord
 import urllib.parse
-
-import io
+import numpy as np
+import pandas as pd
 from PIL import Image
+from dotenv import load_dotenv
+from datetime import datetime
+from collections import Counter
+from discord.ext import commands, tasks
+from discord import app_commands
 import easyocr
-import torch
 reader = easyocr.Reader(["en", "de", "es", "sv", "fr"], gpu=False)
 
 intents = discord.Intents.default()

@@ -1,0 +1,13 @@
+discord.py==2.4.0
+easyocr==1.7.2
+httpx==0.28.1
+numpy==2.2.2
+opencv_contrib_python==4.10.0.84
+opencv_python_headless==4.11.0.86
+orjson==3.10.15
+pandas==2.2.3
+Pillow==11.1.0
+python-dotenv==1.0.1
+torch==2.6.0+cpu
+torchvision==0.21.0+cpu
+torchaudio==2.6.0+cpu 

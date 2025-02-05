@@ -1,10 +1,16 @@
 # RivalsX - A Discord Bot for Marvel Rivals Player Stats 📊
 
 A powerful, efficient Discord bot that fetches player statistics from Marvel Rivals, allowing users to quickly view ranked performance, most played heroes, and match history.
+Uses [MR(API)](https://mrapi.org/), check out their work!
 
 ## ✨ Features
 - **Fetch Player Stats**: Retrieve rank, win rate, hero data and match history for any player.
 - **Image Support**: Upload an image of player names, and the bot will use OCR to extract player names and retrieve their stats.
+
+## Showcase
+![Image 1](https://i.imgur.com/LWERmrD.png)
+![Image 2](https://i.imgur.com/3BKTR2Y.png)
+![Image 3](https://i.imgur.com/d66b5ly.png)
 
 ## Technologies 🌐
 

@@ -1,6 +1,6 @@
 discord.py==2.4.0
 easyocr==1.7.2
-httpx==0.28.1
+httpx==0.27.0
 numpy==2.2.2
 opencv_contrib_python==4.10.0.84
 opencv_python_headless==4.11.0.86

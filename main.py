@@ -92,6 +92,18 @@ heroes_colors = {
     "Iron Fist": "#32CD32"
 }
 
+rank_icons = {
+    "Bronze": "<:1BronzeRank:1337210495085842504>",
+    "Silver": "<:2SilverRank:1337210492812267612>",
+    "Gold": "<:3GoldRank:1337210490853789786>",
+    "Platinum": "<:4PlatinumRank:1337210489079332935>",
+    "Diamond": "<:5DiamondRank:1337210680612229172>",
+    "Grandmaster": "<:6GrandmasterRank:1337210682286018600>",
+    "Celestial": "<:7CelestialRank:1337210684987146272>",
+    "Eternity": "<:8EternityRank:1337210686786240512>",
+    "One Above All": "<:9OneAboveAllRank:1337210689051299871>"
+}
+
 
 def parse_stats(data):
     if not data:
@@ -154,7 +166,9 @@ def parse_stats(data):
 def build_embed(results):        
     username = results["Username"]
     rank = results.get("Rank", "Unranked")
-    
+
+    rank_tier = ''.join(filter(str.isalpha, rank))
+    rank_icon = rank_icons.get(rank_tier, "")
     top_heroes = results["Top 3 Most Played Heroes in Ranked"]
     top_hero = top_heroes[0]['Hero'] if top_heroes else None
 
@@ -172,7 +186,7 @@ def build_embed(results):
     embed.add_field(
         name="🏆 Overall Stats",
         value=(
-            f"• **Rank:** {rank}\n"
+            f"• **Rank:** {rank} {rank_icon}\n"
             f"• **Win Rate:** {overall_stats['Overall Win Rate (%)']}%\n"
             f"• **Matches:** {overall_stats['Total Ranked Matches']}\n"
             f"• **Wins:** {overall_stats['Total Wins']}"
@@ -183,10 +197,14 @@ def build_embed(results):
     embed.add_field(name="Most Played Heroes", value="", inline=False)
 
     for i, hero in enumerate(top_heroes):
+        if hero['Win Rate (%)'] > 70:
+            fire = "🔥"
+        else:
+            fire = ""
         embed.add_field(
             name=f"{hero['Hero']}",
             value=(
-                f"• **WR:** {hero['Win Rate (%)']}%\n"
+                f"• **WR:** {hero['Win Rate (%)']}% {fire}\n"
                 f"• **Matches:** {hero['Matches']}\n"
                 f"• **Wins:** {hero['Wins']}\n"
                 f"• **K/D:** {hero['K/D Ratio']}\n"
@@ -211,6 +229,7 @@ def build_embed(results):
     )
     return embed
 
+
 @bot.event
 async def on_ready():
     try:
@@ -229,11 +248,10 @@ async def stats(ctx, *args):
         response = await client.get(f"https://mrapi.org/api/player-id/{name}")
         if response.status_code == 200:
             data = orjson.loads(response.content)
-            player = next((player for player in data if player['name'].lower() == name.lower()), None)
-            if player is None:
+            if data['id'] is None or data['name'].lower() !=  name.lower():
                 await ctx.send(f"{name} couldn't be found, try here: https://tracker.gg/marvel-rivals/profile/ign/{urllib.parse.quote(name)}/overview")
                 return
-            userID = player['aid']
+            userID = data['id']
             response2 = await client.get(f"https://mrapi.org/api/player/{userID}")
             if response2.status_code == 200:
                 data2 = orjson.loads(response2.content)
@@ -253,6 +271,16 @@ async def stats(ctx, *args):
             print(f"Request failed with status {response.status_code}")
             print("Flag2")
             await ctx.send(f"{name} couldn't be found")
+
+@bot.command()
+async def leaderboard(ctx):
+    await ctx.send("I'm in non-image mode. Use `r.stats <username>` to get stats for a player.")
+
+@bot.event
+async def on_message(message):
+    if bot.user.mentioned_in(message):
+        await message.channel.send("I'm online!")
+    await bot.process_commands(message)
 
       
 load_dotenv()

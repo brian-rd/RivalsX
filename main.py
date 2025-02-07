@@ -252,21 +252,27 @@ async def stats(ctx, *args):
                 await ctx.send(f"{name} couldn't be found, try here: https://tracker.gg/marvel-rivals/profile/ign/{urllib.parse.quote(name)}/overview")
                 return
             userID = data['id']
-            response2 = await client.get(f"https://mrapi.org/api/player/{userID}")
-            if response2.status_code == 200:
-                data2 = orjson.loads(response2.content)
-                results = parse_stats(data2)
-                embed = build_embed(results)
-                await ctx.send(embed=embed)
-            else:
-                print("Private Profile 1")
-                embed = discord.Embed(
-                    title=f"🔒 {name}'s stats",
-                    description="This profile is set to private.",
-                    colour=0xff0000,
-                    timestamp=datetime.now()
-                )
-                await ctx.send(embed=embed)
+            update = await client.get(f"https://mrapi.org/api/player-update/{userID}")
+            if update.status_code == 200:
+                data = orjson.loads(update.content)
+                if data['success'] == True:
+                    response2 = await client.get(f"https://mrapi.org/api/player/{userID}")
+                    if response2.status_code == 200:
+                        data2 = orjson.loads(response2.content)
+                        results = parse_stats(data2)
+                        embed = build_embed(results)
+                        await ctx.send(embed=embed)
+                    else:
+                        print("Private Profile 1")
+                        embed = discord.Embed(
+                            title=f"🔒 {name}'s stats",
+                            description="This profile is set to private.",
+                            colour=0xff0000,
+                            timestamp=datetime.now()
+                        )
+                        await ctx.send(embed=embed)
+                else:
+                    await ctx.send(f"Error updating data for {name}")
         else:
             print(f"Request failed with status {response.status_code}")
             print("Flag2")

@@ -101,62 +101,65 @@ heroes_colors = {
 
 
 def parse_stats(data):
-    if not data:
-        return {"Private": "true"}
-    username = data.get("player_name")
-    rank = data["stats"]["rank"]["rank"]
-    ranked_stats = data["stats"]["ranked"]
-    total_ranked_matches = ranked_stats["total_matches"]
-    total_ranked_wins = ranked_stats["total_wins"]
-    overall_winrate = round((total_ranked_wins / total_ranked_matches) * 100, 2) if total_ranked_matches > 0 else 0
-    
-    hero_stats = data["hero_stats"]
-    hero_data = [
-        {
-            "Hero": stats["hero_name"],
-            "Matches": ranked.get("matches", 0),
-            "Wins": ranked.get("wins", 0),
-            "Losses": ranked.get("matches", 0) - ranked.get("wins", 0),
-            "Win Rate (%)": round((ranked.get("wins", 0) / ranked.get("matches", 1)) * 100, 2) if ranked.get("matches", 0) > 0 else 0,
-            "K/D Ratio": float(ranked.get("kdr", 0.0)),
-            "MVPs": ranked.get("mvp", 0),
+    try:
+        if not data:
+            return {"Private": "true"}
+        username = data.get("player_name")
+        rank = data["stats"]["rank"]["rank"]
+        ranked_stats = data["stats"]["ranked"]
+        total_ranked_matches = ranked_stats["total_matches"]
+        total_ranked_wins = ranked_stats["total_wins"]
+        overall_winrate = round((total_ranked_wins / total_ranked_matches) * 100, 2) if total_ranked_matches > 0 else 0
+        
+        hero_stats = data["hero_stats"]
+        hero_data = [
+            {
+                "Hero": stats["hero_name"],
+                "Matches": ranked.get("matches", 0),
+                "Wins": ranked.get("wins", 0),
+                "Losses": ranked.get("matches", 0) - ranked.get("wins", 0),
+                "Win Rate (%)": round((ranked.get("wins", 0) / ranked.get("matches", 1)) * 100, 2) if ranked.get("matches", 0) > 0 else 0,
+                "K/D Ratio": float(ranked.get("kdr", 0.0)),
+                "MVPs": ranked.get("mvp", 0),
+            }
+            for stats in hero_stats.values()
+            if (ranked := stats.get("ranked"))
+        ]
+
+        hero_df = pd.DataFrame(hero_data).fillna({'Matches': 0}).sort_values(by="Matches", ascending=False)
+        top_3_heroes = hero_df.head(3)
+        
+        match_history = data.get("match_history", [])
+        recent_heroes = [
+            hero_stats[str(match["stats"]["hero"]["id"])]["hero_name"]
+            for match in match_history
+            if str(match["stats"]["hero"]["id"]) in hero_stats
+        ]
+        recent_hero_counts = Counter(recent_heroes)
+
+        recent_hero_data_all = [
+            {"Hero": hero, "Matches in Recent History": matches}
+            for hero, matches in recent_hero_counts.items()
+        ]
+        recent_hero_df_all = pd.DataFrame(recent_hero_data_all).sort_values(by="Matches in Recent History", ascending=False).head(5)
+
+        results = {
+            "Username": username,
+            "Private": "false",
+            "Rank": rank,
+            "Overall Ranked Stats": {
+                "Total Ranked Matches": total_ranked_matches,
+                "Total Wins": total_ranked_wins,
+                "Overall Win Rate (%)": overall_winrate,
+            },
+            "Top 3 Most Played Heroes in Ranked": top_3_heroes.to_dict(orient="records"),
+            "Recently Played Heroes": recent_hero_df_all.to_dict(orient="records"),
         }
-        for stats in hero_stats.values()
-        if (ranked := stats.get("ranked"))
-    ]
 
-    hero_df = pd.DataFrame(hero_data).fillna({'Matches': 0}).sort_values(by="Matches", ascending=False)
-    top_3_heroes = hero_df.head(3)
-    
-    match_history = data.get("match_history", [])
-    recent_heroes = [
-        hero_stats[str(match["stats"]["hero"]["id"])]["hero_name"]
-        for match in match_history
-        if str(match["stats"]["hero"]["id"]) in hero_stats
-    ]
-    recent_hero_counts = Counter(recent_heroes)
-
-    recent_hero_data_all = [
-        {"Hero": hero, "Matches in Recent History": matches}
-        for hero, matches in recent_hero_counts.items()
-    ]
-    recent_hero_df_all = pd.DataFrame(recent_hero_data_all).sort_values(by="Matches in Recent History", ascending=False).head(5)
-
-    results = {
-        "Username": username,
-        "Private": "false",
-        "Rank": rank,
-        "Overall Ranked Stats": {
-            "Total Ranked Matches": total_ranked_matches,
-            "Total Wins": total_ranked_wins,
-            "Overall Win Rate (%)": overall_winrate,
-        },
-        "Top 3 Most Played Heroes in Ranked": top_3_heroes.to_dict(orient="records"),
-        "Recently Played Heroes": recent_hero_df_all.to_dict(orient="records"),
-    }
-
-    
-    return results
+        return results
+    except Exception as e:
+        print(f"Error parsing stats: {e}")
+        return 0
 
 def build_embed(results):        
     username = results["Username"]
@@ -244,6 +247,9 @@ async def stats(ctx, *args):
             if response2.status_code == 200:
                 data2 = orjson.loads(response2.content)
                 results = parse_stats(data2)
+                if results == 0:
+                    await ctx.send(f"Error fetching stats for {name}")
+                    return
                 embed = build_embed(results)
                 await ctx.send(embed=embed)
             else:
@@ -274,7 +280,6 @@ def extract_names_from_image(image_data):
 
 @bot.command()
 async def leaderboard(ctx):
-    """ Extracts leaderboard names from an uploaded image and fetches stats for each player. """
     if not ctx.message.attachments:
         return await ctx.send("Please upload an image of the leaderboard.")
 
@@ -291,9 +296,43 @@ async def leaderboard(ctx):
         return await ctx.send("No valid player names detected in the image.")
 
     await ctx.send(f"Detected Players: {', '.join(player_names)}\nFetching stats...")
-    
-    for name in player_names:
-        await stats(ctx, name)
+
+    not_found = []
+    private_profiles = []
+    successful_embeds = []
+
+    async with httpx.AsyncClient() as client:
+        for name in player_names:
+            response = await client.get(f"https://mrapi.org/api/player-id/{name}")
+            if response.status_code == 200:
+                data = orjson.loads(response.content)
+                if data['id'] is None or data['name'].lower() != name.lower():
+                    not_found.append(name)
+                    continue
+                userID = data['id']
+                response2 = await client.get(f"https://mrapi.org/api/player/{userID}")
+                if response2.status_code == 200:
+                    data2 = orjson.loads(response2.content)
+                    results = parse_stats(data2)
+                    if results == 0:
+                        not_found.append(name)
+                        continue
+                    embed = build_embed(results)
+                    successful_embeds.append(embed)
+                else:
+                    private_profiles.append(name)
+            else:
+                not_found.append(name)
+
+    if not_found:
+        for name in not_found:
+            await ctx.send(f"Couldn't find user: {name}. Please try here: https://tracker.gg/marvel-rivals/profile/ign/{urllib.parse.quote(name)}/overview")
+
+    if private_profiles:
+        await ctx.send(f"These profiles are set to private: {', '.join(private_profiles)}")
+
+    for embed in successful_embeds:
+        await ctx.send(embed=embed)
 
       
 load_dotenv()

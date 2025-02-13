@@ -207,21 +207,35 @@ def parse_stats(data: dict) -> dict:
     )
     top_3_heroes = hero_df.head(3)
     
-    # Count recently played heroes
+    # Count recently played heroes and calculate recent win rate
     match_history = data.get("match_history", [])
-    recent_heroes = [
-        hero_stats[str(match["stats"]["hero"]["id"])]["hero_name"]
-        for match in match_history
-        if str(match["stats"]["hero"]["id"]) in hero_stats
-    ]
-    recent_hero_counts = Counter(recent_heroes)
+    recent_heroes = []
+    recent_wins = Counter()
+    recent_games = Counter()
+    for match in match_history:
+        hero_id = str(match["stats"]["hero"]["id"])
+        if hero_id in hero_stats:
+            hero_name = hero_stats[hero_id]["hero_name"]
+            recent_heroes.append(hero_name)
+            recent_games[hero_name] += 1
+            if match["stats"]["is_win"]:
+                recent_wins[hero_name] += 1
+    
     recent_hero_data = [
-        {"Hero": hero, "Matches in Recent History": count}
-        for hero, count in recent_hero_counts.items()
+        {
+            "Hero": hero,
+            "Matches in Recent History": count,
+            "Win Rate (%)": round((recent_wins[hero] / count) * 100, 2) if count > 0 else 0
+        }
+        for hero, count in recent_games.items()
     ]
+    
     recent_hero_df = pd.DataFrame(recent_hero_data).sort_values(
         by="Matches in Recent History", ascending=False
     ).head(5)
+
+    recent_matches = len(match_history)
+    recent_winrate = round((sum(recent_wins.values()) / recent_matches) * 100, 2) if recent_matches > 0 else 0
 
     results = {
         "Username": username,
@@ -234,6 +248,7 @@ def parse_stats(data: dict) -> dict:
         },
         "Top 3 Most Played Heroes in Ranked": top_3_heroes.to_dict(orient="records"),
         "Recently Played Heroes": recent_hero_df.to_dict(orient="records"),
+        "Recent Matches Win Rate (%)": recent_winrate,
     }
     return results
 
@@ -273,7 +288,7 @@ def build_embed(results: dict) -> discord.Embed:
         ),
         inline=False
     )
-
+    
     embed.add_field(name="Most Played Heroes", value="", inline=False)
     for hero in top_heroes:
         fire = "🔥" if hero['Win Rate (%)'] > 70 else ""
@@ -288,17 +303,18 @@ def build_embed(results: dict) -> discord.Embed:
             ),
             inline=True
         )
-
+        
     recent = results.get("Recently Played Heroes", [])
+    recent_winrate = results.get("Recent Matches Win Rate (%)", 0)
     if recent:
         recent_text = "\n".join(
-            f"• **{item['Hero']}**: {item['Matches in Recent History']} matches"
+            f"• **{item['Hero']}**: {item['Matches in Recent History']} matches ({item['Win Rate (%)']}%)"
             for item in recent
         )
     else:
         recent_text = "No recent matches found."
 
-    embed.add_field(name="⏳ Recently Played Heroes", value=recent_text, inline=False)
+    embed.add_field(name="⏳ Recently Played Heroes", value=f"{recent_text}\n**Recent Win Rate:** {recent_winrate}%", inline=False)
     embed.set_footer(
         text="Powered by RivalsX",
         icon_url="https://cdn2.steamgriddb.com/icon/916030603cc86a9b3d29f4d64f1bc415/32/256x256.png"

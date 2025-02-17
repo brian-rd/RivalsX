@@ -8,8 +8,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from datetime import datetime
 from collections import Counter
-from discord.ext import commands, tasks
-from discord import app_commands
+from discord.ext import commands
 
 
 HEROES_ICONS = {
@@ -355,7 +354,7 @@ class StatsView(discord.ui.View):
         except Exception as e:
             await message.edit(content=f"Failed to refresh stats: {e}")
 
-@bot.command()
+@bot.hybrid_command(name="stats", description="Get stats for a given player name.")
 async def stats(ctx: commands.Context, *, name: str):
     """
     Get stats for a given player name.
@@ -392,7 +391,7 @@ async def stats(ctx: commands.Context, *, name: str):
         print(e)
         await ctx.send("An unexpected error occurred while fetching stats.")
 
-@bot.command()
+@bot.hybrid_command(name="leaderboard", description="Get stats for all names in an image.")
 async def leaderboard(ctx: commands.Context):
     await ctx.send("I'm in non-image mode. Use `r.stats <username>` to get stats for a player.")
 

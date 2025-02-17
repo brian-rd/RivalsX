@@ -104,9 +104,12 @@ API_BASE_URL = "https://mrapi.org/api"
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='r.', intents=intents)
+bot.remove_command('help')
 
 @bot.event
 async def on_ready():
+    servers = str(len(bot.guilds))
+    await bot.change_presence(activity=discord.CustomActivity(name=f'r.stats • In {servers} servers' ,emoji='🖥️'))
     try:
         await bot.tree.sync()
         print(f"Synced slash commands for {bot.user}")
@@ -395,10 +398,34 @@ async def stats(ctx: commands.Context, *, name: str):
 async def leaderboard(ctx: commands.Context):
     await ctx.send("I'm in non-image mode. Use `r.stats <username>` to get stats for a player.")
 
+@bot.hybrid_command(name="help", description="Show help information for commands.")
+async def help(ctx: commands.Context):
+    embed = discord.Embed(
+        title="Help | RivalsX",
+        description="Here are the available commands:",
+        colour=0xF8BC6C,
+        timestamp=datetime.now()
+    )
+    embed.add_field(
+        name="r.stats <username>",
+        value="Get stats for a given player name.",
+        inline=False
+    )
+    embed.add_field(
+        name="r.leaderboard",
+        value="Get stats for all names in an image (currently in non-image mode).",
+        inline=False
+    )
+    embed.set_footer(
+        text="Powered by RivalsX",
+        icon_url="https://cdn2.steamgriddb.com/icon/916030603cc86a9b3d29f4d64f1bc415/32/256x256.png"
+    )
+    await ctx.send(embed=embed)
+    
 @bot.event
 async def on_message(message: discord.Message):
     if bot.user.mentioned_in(message):
-        await message.channel.send("I'm online!")
+        await message.channel.send("I'm online! Run `r.help` to see available commands.")
     await bot.process_commands(message)
 
       

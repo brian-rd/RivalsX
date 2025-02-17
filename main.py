@@ -135,7 +135,7 @@ class MRApiClient:
         self.client = client
 
     async def get_player_id(self, name: str) -> dict:
-        url = f"{API_BASE_URL}/player-id/{name}"
+        url = f"{API_BASE_URL}/player-id/{urllib.parse.quote(name)}"
         response = await self.client.get(url)
         if response.status_code != 200:
             print(f"get_player_id failed with status {response.status_code}")
@@ -269,7 +269,7 @@ def build_embed(results: dict) -> discord.Embed:
     color_hex = HEROES_COLORS.get(top_hero, "#000000")
     embed = discord.Embed(
         title=f"📊 {username}'s Stats",
-        url=f"https://tracker.gg/marvel-rivals/profile/ign/{username}/overview",
+        url=f"https://tracker.gg/marvel-rivals/profile/ign/{urllib.parse.quote(username)}/overview",
         colour=discord.Colour(int(color_hex.lstrip('#'), 16)),
         timestamp=datetime.now()
     )
@@ -338,8 +338,22 @@ async def fetch_player_stats(name: str) -> dict:
         stats_data = await api_client.get_player_stats(user_id)
         return parse_stats(stats_data)
 
+class StatsView(discord.ui.View):
+    def __init__(self):
+        super().__init__()
 
-
+    @discord.ui.button(emoji="🔄", label="Refresh", style=discord.ButtonStyle.secondary)
+    async def refresh(self, interaction: discord.Interaction, button: discord.ui.Button):
+        message = interaction.message
+        name = message.embeds[0].title.split("'s")[0].replace("📊 ", "")
+        await message.edit(content=f"Updating stats for {name}...", embed=None)
+        await interaction.response.defer()
+        try:
+            results = await fetch_player_stats(name)
+            embed = build_embed(results)
+            await message.edit(content=None, embed=embed)
+        except Exception as e:
+            await message.edit(content=f"Failed to refresh stats: {e}")
 
 @bot.command()
 async def stats(ctx: commands.Context, *, name: str):
@@ -348,12 +362,13 @@ async def stats(ctx: commands.Context, *, name: str):
     Usage: r.stats <username>
     """
     print(f"Fetching stats for {name}")
+    message = await ctx.send(f"Fetching stats for {name}...", view=StatsView())
     try:
         results = await fetch_player_stats(name)
         embed = build_embed(results)
-        await ctx.send(embed=embed)
+        await message.edit(content=None, embed=embed, view=StatsView())
     except PlayerNotFoundException:
-        url = f"https://tracker.gg/marvel-rivals/profile/ign/{urllib.parse.quote(name)}/overview"
+        url = f"https://tracker.gg/marvel-rivals/profile/ign/{urllib.parse.quote(name.replace(' ', '%20'))}/overview"
         await ctx.send(f"{name} couldn't be found. Try checking here: {url}")
     except PrivateProfileException as e:
         if e:
@@ -374,6 +389,7 @@ async def stats(ctx: commands.Context, *, name: str):
     except APIUpdateFailedException:
         await ctx.send(f"Error updating data for {name}")
     except Exception as e:
+        print(e)
         await ctx.send("An unexpected error occurred while fetching stats.")
 
 @bot.command()

@@ -108,14 +108,20 @@ bot.remove_command('help')
 
 @bot.event
 async def on_ready():
-    servers = str(len(bot.guilds))
-    await bot.change_presence(activity=discord.CustomActivity(name=f'r.stats • In {servers} servers' ,emoji='🖥️'))
+    servers = bot.guilds
+    server_count = str(len(bot.guilds))
+    await bot.change_presence(activity=discord.CustomActivity(name=f'r.stats • In {server_count} servers' ,emoji='🖥️'))
     try:
         await bot.tree.sync()
         print(f"Synced slash commands for {bot.user}")
     except Exception as e:
         print(f"Failed to sync commands: {e}")
     print(f'Logged in as {bot.user}')
+    
+    activeservers = bot.guilds
+    print(f"Bot is online in {server_count} servers: {activeservers}")
+
+
 class PlayerNotFoundException(Exception):
     """Raised when a player cannot be found via the API."""
     pass
@@ -347,6 +353,10 @@ class StatsView(discord.ui.View):
     @discord.ui.button(emoji="🔄", label="Refresh", style=discord.ButtonStyle.secondary)
     async def refresh(self, interaction: discord.Interaction, button: discord.ui.Button):
         message = interaction.message
+        if not message.embeds:
+            await interaction.response.send_message("No embed found to refresh.", ephemeral=True)
+            return
+        
         name = message.embeds[0].title.split("'s")[0].replace("📊 ", "")
         await message.edit(content=f"Updating stats for {name}...", embed=None)
         await interaction.response.defer()
@@ -363,7 +373,7 @@ async def stats(ctx: commands.Context, *, name: str):
     Get stats for a given player name.
     Usage: r.stats <username>
     """
-    print(f"Fetching stats for {name}")
+    print(f"Fetching stats for {name} at {datetime.now()} by {ctx.author.name}")
     message = await ctx.send(f"Fetching stats for {name}...", view=StatsView())
     try:
         results = await fetch_player_stats(name)

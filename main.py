@@ -6,48 +6,32 @@ import discord
 import urllib.parse
 import pandas as pd
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, UTC
 from collections import Counter
 from discord.ext import commands
 
 
-HEROES_ICONS = {
-    "Bruce Banner": "https://mrapi.org/assets/characters/bruce-banner-headbig.png",
-    "The Punisher": "https://mrapi.org/assets/characters/the-punisher-headbig.png",
-    "Storm": "https://mrapi.org/assets/characters/storm-headbig.png",
-    "Loki": "https://mrapi.org/assets/characters/loki-headbig.png",
-    "Doctor Strange": "https://mrapi.org/assets/characters/doctor-strange-headbig.png",
-    "Mantis": "https://mrapi.org/assets/characters/mantis-headbig.png",
-    "Hawkeye": "https://mrapi.org/assets/characters/hawkeye-headbig.png",
-    "Captain America": "https://mrapi.org/assets/characters/captain-america-headbig.png",
-    "Rocket Raccoon": "https://mrapi.org/assets/characters/rocket-raccoon-headbig.png",
-    "Hela": "https://mrapi.org/assets/characters/hela-headbig.png",
-    "Cloak & Dagger": "https://mrapi.org/assets/characters/cloak-dagger-headbig.png",
-    "Black Panther": "https://mrapi.org/assets/characters/black-panther-headbig.png",
-    "Groot": "https://mrapi.org/assets/characters/groot-headbig.png",
-    "Magik": "https://mrapi.org/assets/characters/magik-headbig.png",
-    "Moon Knight": "https://mrapi.org/assets/characters/moon-knight-headbig.png",
-    "Luna Snow": "https://mrapi.org/assets/characters/luna-snow-headbig.png",
-    "Squirrel Girl": "https://mrapi.org/assets/characters/squirrel-girl-headbig.png",
-    "Black Widow": "https://mrapi.org/assets/characters/black-widow-headbig.png",
-    "Iron Man": "https://mrapi.org/assets/characters/iron-man-headbig.png",
-    "Venom": "https://mrapi.org/assets/characters/venom-headbig.png",
-    "Spider-man": "https://mrapi.org/assets/characters/spider-man-headbig.png",
-    "Magneto": "https://mrapi.org/assets/characters/magneto-headbig.png",
-    "Scarlet Witch": "https://mrapi.org/assets/characters/scarlet-witch-headbig.png",
-    "Thor": "https://mrapi.org/assets/characters/thor-headbig.png",
-    "Mister Fantastic": "https://mrapi.org/assets/characters/mister-fantastic-headbig.png",
-    "Winter Soldier": "https://mrapi.org/assets/characters/winter-soldier-headbig.png",
-    "Peni Parker": "https://mrapi.org/assets/characters/peni-parker-headbig.png",
-    "Star-lord": "https://mrapi.org/assets/characters/star-lord-headbig.png",
-    "Namor": "https://mrapi.org/assets/characters/namor-headbig.png",
-    "Adam Warlock": "https://mrapi.org/assets/characters/adam-warlock-headbig.png",
-    "Jeff The Land Shark": "https://mrapi.org/assets/characters/jeff-the-land-shark-headbig.png",
-    "Psylocke": "https://mrapi.org/assets/characters/psylocke-headbig.png",
-    "Wolverine": "https://mrapi.org/assets/characters/wolverine-headbig.png",
-    "Invisible Woman": "https://mrapi.org/assets/characters/invisible-woman-headbig.png",
-    "Iron Fist": "https://mrapi.org/assets/characters/iron-fist-headbig.png"
-}
+API_BASE_URL = "https://mrapi.org/api"
+
+async def fetch_hero_data():
+    async with httpx.AsyncClient() as client:
+        heroes = []
+        ids_heroes = {}
+        heroes_icons = {}
+        url = f"{API_BASE_URL}/heroes"
+        response = await client.get(url)
+        if response.status_code == 200:
+            data = orjson.loads(response.content)
+            for hero in data:
+                heroes.append(hero["name"])
+                ids_heroes[hero["id"]] = hero["name"]
+                heroes_icons[hero["name"]] = hero["transformations"][0]["icon"]
+        else:
+            print(f"Failed to fetch hero data with status {response.status_code}")
+        
+        return(heroes, ids_heroes, heroes_icons)
+
+HEROES, IDS_HEROES, HEROES_ICONS = asyncio.run(fetch_hero_data())
 
 HEROES_COLORS = {
     "Bruce Banner": "#4A7A3D",
@@ -87,6 +71,10 @@ HEROES_COLORS = {
     "Iron Fist": "#32CD32"
 }
 
+for hero in HEROES:
+    if hero not in HEROES_COLORS:
+        HEROES_COLORS[hero] = "#000000"
+        
 RANK_ICONS = {
     "Bronze": "<:1BronzeRank:1337210495085842504>",
     "Silver": "<:2SilverRank:1337210492812267612>",
@@ -99,7 +87,6 @@ RANK_ICONS = {
     "One Above All": "<:9OneAboveAllRank:1337210689051299871>"
 }
 
-API_BASE_URL = "https://mrapi.org/api"
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -260,7 +247,103 @@ def parse_stats(data: dict) -> dict:
     }
     return results
 
+def parse_history(data: dict) -> list:
+    """
+    Parse match history JSON from the API into a structured list.
+    """
+    if not data or not data.get("match_history"):
+        return []
 
+    name = data.get("player_name")
+    match_history = data.get("match_history", [])
+    parsed_history = []
+    for match in match_history:
+        kills = match["stats"]["kills"]
+        deaths = match["stats"]["deaths"]
+        assists = match["stats"]["assists"]
+
+        # Compute KDA ratio (avoiding division by zero)
+        kda_ratio = (kills + assists) / deaths if deaths != 0 else (kills + assists)
+
+        parsed_history.append({
+            "Name": name,
+            "Match Timestamp": datetime.fromtimestamp(match['match_timestamp'], UTC).strftime('%Y-%m-%d %H:%M:%S'),
+            "Match Duration": f"{match['match_duration']['minutes']}m {match['match_duration']['seconds']}s",
+            "Season": match["season"],
+            "Match UID": match["match_uid"],
+            "Map": match["match_map"]["name"],
+            "Gamemode": match["gamemode"]["name"].title(),
+            "Gamemode2": match["match_map"]["gamemode"].title(),
+            "Score": f"Ally: {match['score']['ally']} - Enemy: {match['score']['enemy']}",
+            "Winner Side": match["winner_side"],
+            "Player Side": match["player_side"],
+            "MVP UID": match["mvp_uid"],
+            "SVP UID": match["svp_uid"],
+            "Kills": kills,
+            "Deaths": deaths,
+            "Assists": assists,
+            "Is Win": match["stats"]["is_win"],
+            "Hero ID": match["stats"]["hero"]["id"],
+            "KDA": f"{kda_ratio:.2f}",
+        })
+    return parsed_history
+
+async def fetch_history_data(name: str) -> dict:
+    """
+    Fetch match history data using the MRApiClient.
+    """
+    async with httpx.AsyncClient() as http_client:
+        api_client = MRApiClient(http_client)
+        # Get the player ID
+        player_data = await api_client.get_player_id(name)
+        user_id = player_data["id"]
+
+        # Update player data
+        await api_client.update_player(user_id)
+
+        # Fetch detailed player stats
+        stats_data = await api_client.get_player_stats(user_id)
+        return parse_history(stats_data)
+    
+def build_history_embeds(history: list) -> discord.Embed:
+    """
+    Build Discord embeds for the parsed history.
+    """
+    embeds = []
+    if not history:
+        return [discord.Embed(title="No match history found.", colour=0xff0000)]
+    for match in history:
+        if len(embeds) >= 10:
+            break
+        embed = discord.Embed(
+            title='Victory' if match['Is Win'] else 'Defeat' + f" ({match['Name']})",
+            url=f"https://tracker.gg/marvel-rivals/matches/{match['Match UID']}",
+            colour=discord.Colour(0x5EE790) if match['Is Win'] else discord.Colour(0xE4485D),
+            timestamp=datetime.now()
+        )
+
+        embed.add_field(
+            name="Details",
+            value=f"- {match['Gamemode']}\n- **Time**: {match["Match Timestamp"]}\n- **Duration**: {match["Match Duration"]}\n- **Gamemode**: {match["Gamemode2"]}\n- **Map**: {match["Map"]}\n- **Score**: {match["Score"]}",
+            inline=True
+        )
+        embed.add_field(name="Performance",
+                        value=f"- **KDA**: {match['KDA']}\n- **Kills**: {match['Kills']}\n- **Deaths**: {match['Deaths']}\n- **Assists**: {match['Assists']}",
+                        inline=True)
+        hero_id = match["Hero ID"]
+        hero_name = IDS_HEROES.get(str(hero_id), "Unknown Hero")
+        embed.add_field(name="Heroes Played",
+                value=f"- {hero_name}",
+                inline=True)
+        
+        embed.set_thumbnail(url=HEROES_ICONS.get(hero_name, "https://cdn2.steamgriddb.com/icon/916030603cc86a9b3d29f4d64f1bc415/32/256x256.png"))
+        embed.set_footer(
+            text="Powered by RivalsX",
+            icon_url="https://cdn2.steamgriddb.com/icon/916030603cc86a9b3d29f4d64f1bc415/32/256x256.png"
+        )
+        embeds.append(embed)
+    return embeds
+        
 def build_embed(results: dict) -> discord.Embed:
     """
     Build a Discord embed from the parsed stats.
@@ -426,12 +509,78 @@ async def help(ctx: commands.Context):
         value="Get stats for all names in an image (currently in non-image mode).",
         inline=False
     )
+    
+    embed.add_field(
+        name="r.history <username>",
+        value="Get recent matches for a player.",
+        inline=False
+    )
+    
     embed.set_footer(
         text="Powered by RivalsX",
         icon_url="https://cdn2.steamgriddb.com/icon/916030603cc86a9b3d29f4d64f1bc415/32/256x256.png"
     )
     await ctx.send(embed=embed)
-    
+
+
+class HistoryView(discord.ui.View):
+    def __init__(self, embeds):
+        super().__init__()
+        self.embeds = embeds
+        self.current_page = 0
+
+    @discord.ui.button(emoji="⬅️", label="Previous", style=discord.ButtonStyle.secondary)
+    async def previous(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.current_page > 0:
+            self.current_page -= 1
+            await interaction.response.edit_message(embed=self.embeds[self.current_page], view=self)
+
+    @discord.ui.button(emoji="➡️", label="Next", style=discord.ButtonStyle.secondary)
+    async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.current_page < len(self.embeds) - 1:
+            self.current_page += 1
+            await interaction.response.edit_message(embed=self.embeds[self.current_page], view=self)
+
+    @discord.ui.button(emoji="🔄", label="Refresh", style=discord.ButtonStyle.secondary)
+    async def refresh(self, interaction: discord.Interaction, button: discord.ui.Button):
+        message = interaction.message
+        if not message.embeds:
+            await interaction.response.send_message("Nothing found to refresh.", ephemeral=True)
+            return
+        
+        name = message.embeds[0].title.split('(')[1].split(')')[0]
+        await message.edit(content=f"Updating history for {name}...", embed=None)
+        await interaction.response.defer()
+        try:
+            history_data = await fetch_history_data(name)
+            self.embeds = build_history_embeds(history_data)
+            self.current_page = 0
+            await message.edit(content=None, embed=self.embeds[self.current_page], view=self)
+        except Exception as e:
+            await message.edit(content=f"Failed to refresh stats: {e}")
+
+@bot.hybrid_command(name="history", description="Get recent matches for a player.")
+async def history(ctx: commands.Context, *, name: str):
+    print(f"Fetching match history for {name} at {datetime.now()} by {ctx.author.name}")
+    message = await ctx.send(f"Fetching match history for {name}...")
+    try:
+        history_data = await fetch_history_data(name)
+        embeds = build_history_embeds(history_data)
+        if embeds:
+            await message.edit(content=None, embed=embeds[0], view=HistoryView(embeds))
+        else:
+            await message.edit(content="No match history found.")
+    except PlayerNotFoundException:
+        url = f"https://tracker.gg/marvel-rivals/profile/ign/{urllib.parse.quote(name.replace(' ', '%20'))}/overview"
+        await ctx.send(f"{name} couldn't be found. Try checking here: {url}")
+    except APIUpdateFailedException:
+        await ctx.send(f"Error updating data for {name}")
+    except Exception as e:
+        print("Error", e)
+        await ctx.send("An unexpected error occurred while fetching match history.")
+
+
+
 @bot.event
 async def on_message(message: discord.Message):
     if bot.user.mentioned_in(message):

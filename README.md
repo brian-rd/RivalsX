@@ -31,6 +31,15 @@ Examples:
 - `r.stats pvc`
 - `r.stats s1natraa`
 
+### `r.history <username>`
+Fetches a player's recent match history and their performance, including:
+- Match details (Gamemode, Time, Duration, Map, Score)
+- Performance (KDA, Kills, Deaths, Assists)
+- Heroes Played
+Examples:
+- `r.history pvc`
+- `r.history s1natraa`
+
 ### `r.leaderboard` +  attached image
 Upload a screenshot of player names, and the bot automatically extracts player names using OCR and retrieves their stats.
 Examples:
